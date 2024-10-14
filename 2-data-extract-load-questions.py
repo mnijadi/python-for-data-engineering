@@ -15,8 +15,19 @@
 # Hint: Look at importing the database libraries for sqlite3 and duckdb and create connections to talk to the respective databases
 
 # Fetch data from the SQLite Customer table
+import sqlite3
+
+query = "SELECT * FROM customer"
+
+with sqlite3.connect("tpch.db") as sqlite_conn:
+    records = sqlite_conn.execute(query).fetchall()
 
 # Insert data into the DuckDB Customer table
+import duckdb
+
+with duckdb.connect("duckdb.db") as duckdb_conn:
+    duckdb_conn.executemany("INSERT INTO customer VALUES (?, ?, ?, ?, ?, ?)", records)
+    duckdb_conn.commit()
 
 # Hint: Look for Commit and close the connections
 # Commit tells the DB connection to send the data to the database and commit it, if you don't commit the data will not be inserted
