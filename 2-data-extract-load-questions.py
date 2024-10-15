@@ -44,13 +44,31 @@ with duckdb.connect("duckdb.db") as duckdb_conn:
 bucket_name = "noaa-ghcn-pds"
 file_key = "csv.gz/by_station/ASN00002022.csv.gz"
 # Create a boto3 client with anonymous access
+import csv
+import gzip
+from io import StringIO
+
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
+
+
+s3_client = boto3.client("s3", config=Config(signature_version=UNSIGNED))
 
 # Download the CSV file from S3
-# Decompress the gzip data
-# Read the CSV file using csv.reader
-# Connect to the DuckDB database (assume WeatherData table exists)
+csv_gz_obj = s3_client.get_object(Bucket=bucket_name, Key=file_key)
+compressed_csv = csv_gz_obj["Body"].read()
 
-# Insert data into the DuckDB WeatherData table
+# Decompress the gzip data
+csv_content = gzip.decompress(compressed_csv).decode("utf-8")
+
+# Read the CSV file using csv.reader
+data = list(csv.reader(StringIO(csv_content)))
+
+# Connect to the DuckDB database (assume WeatherData table exists)
+with duckdb.connect("duckdb.db") as duckdb_conn:
+    duckdb_conn.executemany("INSERT INTO weatherdata VALUES (?, ?, ?, ?, ?, ?, ?, ?)", data)
+    duckdb_conn.commit()
 
 # API
 # Question: How do you read data from the CoinCap API given below and write the data to a DuckDB database?
@@ -61,18 +79,45 @@ file_key = "csv.gz/by_station/ASN00002022.csv.gz"
 url = "https://api.coincap.io/v2/exchanges"
 
 # Fetch data from the CoinCap API
-# Connect to the DuckDB database
+response = requests.get(url)
+print(response.status_code)
+data = response.json()["data"]
 
-# Insert data into the DuckDB Exchanges table
-# Prepare data for insertion
-# Hint: Ensure that the data types of the data to be inserted is compatible with DuckDBs data column types in ./setup_db.py
+# Connect to the DuckDB database
+with duckdb.connect("duckdb.db") as duckdb_conn:
+    duckdb_conn.executemany("""
+    INSERT INTO exchanges VALUES (
+        $exchangeId,
+        $name,
+        $rank,
+        $percentTotalVolume,
+        $volumeUsd,
+        $tradingPairs,
+        $socket,
+        $exchangeUrl,
+        $updated
+    )""", data)
+    duckdb_conn.commit()
 
 
 # Local disk
 # Question: How do you read a CSV file from local disk and write it to a database?
 # Look up open function with csvreader for python
+csv_file_location = "./data/sample_data.csv"
+with open(csv_file_location, "r") as csv_file:
+    csv_reader = csv.reader(csv_file, delimiter=",")
+    for record in csv_reader:
+        print(", ".join(record))
 
 # Web scraping
 # Questions: Use beatiful soup to scrape the below website and print all the links in that website
 # URL of the website to scrape
 url = 'https://example.com'
+
+import bs4
+
+response = requests.get(url)
+soup = bs4.BeautifulSoup(response.content, "html.parser")
+
+all_links = [a["href"] for a in soup.find_all("a")]
+print(all_links)
